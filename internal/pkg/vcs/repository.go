@@ -25,8 +25,8 @@ type Repository struct {
 	path string
 }
 
-func newRepository(rootDir string, dir string) (*Repository, error) {
-	dirPath := filepath.Join(rootDir, dir)
+func newRepository(vcsDir string, dir string) (*Repository, error) {
+	dirPath := filepath.Join(vcsDir, dir)
 	_, err := os.Stat(dirPath)
 	if err == nil {
 		return &Repository{path: dirPath}, nil

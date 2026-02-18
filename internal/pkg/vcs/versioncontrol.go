@@ -40,6 +40,10 @@ func NewVersionControl(dir string) (*VersionControl, error) {
 	}, nil
 }
 
+func (vc *VersionControl) GetWorkingRepository() string {
+	return vc.currentRepo
+}
+
 func (vc *VersionControl) ReadConfig() (string, error) {
 	return vc.cfg.GetUsername()
 }
@@ -48,7 +52,7 @@ func (vc *VersionControl) WriteConfig(username string) error {
 	return vc.cfg.SetUsername(username)
 }
 
-func (vc *VersionControl) Switch(dir string) error {
+func (vc *VersionControl) Checkout(dir string) error {
 	if _, ok := vc.repositories[dir]; ok {
 		vc.currentRepo = dir
 		return nil
@@ -65,21 +69,4 @@ func (vc *VersionControl) Switch(dir string) error {
 	vc.repositories[dir] = repository
 	vc.currentRepo = dir
 	return nil
-}
-
-func (vc *VersionControl) CreateRepository(dir string) (*Repository, error) {
-	if _, ok := vc.repositories[dir]; ok {
-		return nil, ErrDirectoryNotEmpty
-	}
-
-	repository, err := newRepository(vc.vcsRoot, dir)
-	if err != nil {
-		return nil, err
-	}
-
-	vc.m.Lock()
-	defer vc.m.Unlock()
-
-	vc.repositories[dir] = repository
-	return repository, nil
 }
