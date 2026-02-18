@@ -7,11 +7,11 @@ import (
 	"github.com/oc/vcs/internal/pkg/vcs"
 )
 
-type checkoutCmd struct {
+type repositoryCmd struct {
 	commandMeta
 }
 
-func (c *checkoutCmd) Run(ctx context.Context, vc *vcs.VersionControl, args ...string) string {
+func (c *repositoryCmd) Run(ctx context.Context, vc *vcs.VersionControl, args ...string) string {
 	select {
 	case <-ctx.Done():
 		return ctx.Err().Error()
