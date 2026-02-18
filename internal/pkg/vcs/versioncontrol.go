@@ -2,6 +2,7 @@ package vcs
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 )
@@ -11,7 +12,6 @@ const (
 )
 
 var (
-	ErrDirectoryNotEmpty    = errors.New("directory is not empty")
 	ErrConfigFileNotCreated = errors.New("config file not created")
 )
 
@@ -20,7 +20,7 @@ type VersionControl struct {
 	cfg *config
 
 	vcsRoot      string
-	currentRepo  string
+	currentRepo  *Repository
 	repositories map[string]*Repository
 }
 
@@ -33,15 +33,29 @@ func NewVersionControl(dir string) (*VersionControl, error) {
 		return nil, ErrConfigFileNotCreated
 	}
 
-	return &VersionControl{
+	vc := &VersionControl{
 		cfg:          &config{cfgFilePath: filepath.Join(dir, configFile)},
 		vcsRoot:      dir,
 		repositories: make(map[string]*Repository),
-	}, nil
+	}
+
+	if err := vc.initRepositories(); err != nil {
+		return nil, err
+	}
+
+	return vc, nil
 }
 
-func (vc *VersionControl) GetWorkingRepository() string {
+func (vc *VersionControl) GetWorkingRepository() *Repository {
 	return vc.currentRepo
+}
+
+func (vc *VersionControl) ListRepositories() []string {
+	var result []string
+	for name := range vc.repositories {
+		result = append(result, name)
+	}
+	return result
 }
 
 func (vc *VersionControl) ReadConfig() (string, error) {
@@ -53,8 +67,8 @@ func (vc *VersionControl) WriteConfig(username string) error {
 }
 
 func (vc *VersionControl) Checkout(dir string) error {
-	if _, ok := vc.repositories[dir]; ok {
-		vc.currentRepo = dir
+	if repo, ok := vc.repositories[dir]; ok {
+		vc.currentRepo = repo
 		return nil
 	}
 
@@ -67,6 +81,40 @@ func (vc *VersionControl) Checkout(dir string) error {
 	defer vc.m.Unlock()
 
 	vc.repositories[dir] = repository
-	vc.currentRepo = dir
+	vc.currentRepo = repository
 	return nil
+}
+
+func (vc *VersionControl) initRepositories() error {
+	folders, err := listFolders(vc.vcsRoot)
+	if err != nil {
+		return err
+	}
+
+	for _, folder := range folders {
+		repository, err := newRepository(vc.vcsRoot, folder)
+		if err != nil {
+			return err
+		}
+
+		vc.repositories[folder] = repository
+	}
+
+	return nil
+}
+
+func listFolders(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var folders []string
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != vcsDir {
+			folders = append(folders, e.Name())
+		}
+	}
+
+	return folders, nil
 }

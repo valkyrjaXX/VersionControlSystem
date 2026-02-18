@@ -25,6 +25,6 @@ func (c *checkoutCmd) Run(ctx context.Context, vc *vcs.VersionControl, args ...s
 			return err.Error()
 		}
 
-		return fmt.Sprintf("Working directory %s.", vc.GetWorkingRepository())
+		return fmt.Sprintf("Working directory %s.", vc.GetWorkingRepository().GetName())
 	}
 }
