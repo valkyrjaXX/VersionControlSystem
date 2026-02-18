@@ -3,6 +3,7 @@ package vcs
 import (
 	"bufio"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 )
@@ -73,4 +74,9 @@ func fileExists(filePath string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func copyFile(dstFile *os.File, srcFile *os.File) error {
+	_, err := io.Copy(dstFile, srcFile)
+	return err
 }

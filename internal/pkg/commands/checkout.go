@@ -9,11 +9,11 @@ import (
 	"github.com/oc/vcs/internal/pkg/vcs"
 )
 
-type commitCmd struct {
+type checkoutCmd struct {
 	commandMeta
 }
 
-func (c *commitCmd) Run(ctx context.Context, vc *vcs.VersionControl, args ...string) string {
+func (c *checkoutCmd) Run(ctx context.Context, vc *vcs.VersionControl, args ...string) string {
 	select {
 	case <-ctx.Done():
 		return ctx.Err().Error()
@@ -24,24 +24,18 @@ func (c *commitCmd) Run(ctx context.Context, vc *vcs.VersionControl, args ...str
 		}
 
 		if len(args) == 0 {
-			return "Message was not passed."
+			return "Commit id was not passed."
 		}
 
-		message := args[0]
-		username, err := vc.ReadConfig()
+		commit := args[0]
+		err := workingRepository.Checkout(commit)
 		if err != nil {
-			return err.Error()
-		}
-
-		hash, err := workingRepository.Commit(username, message)
-		if err != nil {
-			if errors.Is(err, vcs.ErrNothingToCommit) {
-				return "Nothing to commit."
+			if errors.Is(err, vcs.ErrCommitNotFound) {
+				return "Commit does not exist."
 			}
-
 			return err.Error()
 		}
 
-		return fmt.Sprintf("Changes are committed. %s", hash)
+		return fmt.Sprintf("Switched to commit %s.", commit)
 	}
 }

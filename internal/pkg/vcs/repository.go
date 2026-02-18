@@ -1,18 +1,17 @@
 package vcs
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 const (
-	vcsDir     = "vcs"
+	vcsDir     = ".vcs"
 	commitsDir = "commits"
 
 	indexFile = "index.txt"
@@ -27,6 +26,7 @@ var (
 	ErrEmptyFile       = errors.New("empty file")
 	ErrFileNotExist    = errors.New("file does not exist")
 	ErrNothingToCommit = errors.New("nothing to commit")
+	ErrCommitNotFound  = errors.New("commit not found")
 )
 
 type Repository struct {
@@ -78,29 +78,28 @@ func (r *Repository) ClearIndex() error {
 	return os.Truncate(filePath, 0)
 }
 
-func (r *Repository) CreateCommit(username string, message string) *Commit {
-	id := uuid.NewString()
-	return &Commit{
-		Uuid:          id,
-		Hash:          sha256.New(),
-		Username:      username,
-		WorkingDir:    r.path,
-		CommitDirPath: filepath.Join(r.path, vcsDir, commitsDir, id),
-		Message:       message,
-	}
-}
-
-func (r *Repository) Commit(commit *Commit) (string, error) {
-	if commit.Hash.Size() == 0 {
-		return "", ErrNothingToCommit
-	}
-
-	changesHash := fmt.Sprintf("%x", commit.Hash.Sum(nil))
-	if err := r.writeLog(changesHash, commit.Username, commit.Message); err != nil {
+func (r *Repository) Commit(username string, message string) (string, error) {
+	c, err := newCommit(r.path)
+	if err != nil {
 		return "", err
 	}
 
-	return changesHash, r.ClearIndex()
+	if err = r.ReadIndex(func(filePath string) error {
+		return c.copyFile(filePath)
+	}); err != nil {
+		return "", err
+	}
+
+	hash, err := c.execute()
+	if err != nil {
+		return "", err
+	}
+
+	if err := r.writeLog(hash, username, message); err != nil {
+		return "", err
+	}
+
+	return hash, r.ClearIndex()
 }
 
 func (r *Repository) ReadLog(callback func(commit, author, comment string)) error {
@@ -119,6 +118,48 @@ func (r *Repository) ReadLog(callback func(commit, author, comment string)) erro
 	}
 
 	return nil
+}
+
+func (r *Repository) Checkout(commitID string) error {
+	commitDirPath := filepath.Join(r.path, vcsDir, commitsDir, commitID)
+	_, err := os.Stat(commitDirPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ErrCommitNotFound
+		}
+		return err
+	}
+
+	return filepath.WalkDir(commitDirPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		reader, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+
+		dstFilePath := strings.ReplaceAll(path, commitDirPath, r.path)
+		writer, err := os.OpenFile(dstFilePath, os.O_WRONLY|os.O_TRUNC, readWriteFileMode)
+		if err != nil {
+			return err
+		}
+
+		defer writer.Close()
+
+		_, err = io.Copy(writer, reader)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 func (r *Repository) writeLog(hash, username, message string) error {
