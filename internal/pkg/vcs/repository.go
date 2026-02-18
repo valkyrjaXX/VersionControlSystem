@@ -1,10 +1,14 @@
 package vcs
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -20,8 +24,9 @@ const (
 var (
 	readWriteFileMode = os.FileMode(0444)
 
-	ErrEmptyFile    = errors.New("empty file")
-	ErrFileNotExist = errors.New("file does not exist")
+	ErrEmptyFile       = errors.New("empty file")
+	ErrFileNotExist    = errors.New("file does not exist")
+	ErrNothingToCommit = errors.New("nothing to commit")
 )
 
 type Repository struct {
@@ -66,6 +71,71 @@ func (r *Repository) WriteToIndex(fileToAdd string) error {
 
 	_, err = fmt.Fprintln(file, fileToAdd)
 	return err
+}
+
+func (r *Repository) ClearIndex() error {
+	filePath := filepath.Join(r.path, vcsDir, indexFile)
+	return os.Truncate(filePath, 0)
+}
+
+func (r *Repository) CreateCommit(username string, message string) *Commit {
+	id := uuid.NewString()
+	return &Commit{
+		Uuid:          id,
+		Hash:          sha256.New(),
+		Username:      username,
+		WorkingDir:    r.path,
+		CommitDirPath: filepath.Join(r.path, vcsDir, commitsDir, id),
+		Message:       message,
+	}
+}
+
+func (r *Repository) Commit(commit *Commit) (string, error) {
+	if commit.Hash.Size() == 0 {
+		return "", ErrNothingToCommit
+	}
+
+	changesHash := fmt.Sprintf("%x", commit.Hash.Sum(nil))
+	if err := r.writeLog(changesHash, commit.Username, commit.Message); err != nil {
+		return "", err
+	}
+
+	return changesHash, r.ClearIndex()
+}
+
+func (r *Repository) ReadLog(callback func(commit, author, comment string)) error {
+	filePath := filepath.Join(r.path, vcsDir, logFile)
+	read, err := readFileContent(filePath, func(data string) error {
+		dataSlice := strings.SplitN(data, comma, 3)
+		callback(dataSlice[0], dataSlice[1], dataSlice[2])
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if read == 0 {
+		return ErrEmptyFile
+	}
+
+	return nil
+}
+
+func (r *Repository) writeLog(hash, username, message string) error {
+	filePath := filepath.Join(r.path, vcsDir, logFile)
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND, readWriteFileMode)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	data := strings.Join([]string{hash, username, message}, comma)
+	_, err = fmt.Fprintln(file, data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func newRepository(vcsDir string, dir string) (*Repository, error) {

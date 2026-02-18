@@ -14,7 +14,7 @@ func createDirectory(dirPath string) error {
 	}
 
 	if errors.Is(err, os.ErrNotExist) {
-		return os.Mkdir(dirPath, fs.ModeDir)
+		return os.MkdirAll(dirPath, fs.ModeDir)
 	}
 
 	return err

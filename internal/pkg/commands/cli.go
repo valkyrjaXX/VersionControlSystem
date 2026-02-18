@@ -40,6 +40,8 @@ func NewCli(vc *vcs.VersionControl) VcsCli {
 			&configCmd{commandMeta: commandMeta{name: "config", description: "Get and set a username."}},
 			&repositoryCmd{commandMeta: commandMeta{name: "repository", description: "Checkout a repository."}},
 			&addCmd{commandMeta: commandMeta{name: "add", description: "Add a file to the index."}},
+			&commitCmd{commandMeta: commandMeta{name: "commit", description: "Save changes."}},
+			&logCmd{commandMeta: commandMeta{name: "log", description: "Show commit logs."}},
 		},
 	}
 }
